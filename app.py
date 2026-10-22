@@ -1,214 +1,272 @@
-import streamlit as st
-import pandas as pd
-import numpy as np
-import joblib
 import os
 import traceback
 
+import joblib
+import numpy as np
+import pandas as pd
+import streamlit as st
+
 # ============================================================
-# PAGE CONFIGURATION
+# PAGE CONFIG
 # ============================================================
 st.set_page_config(
-    page_title="AI Predictive Maintenance",
+    page_title="Predictive Maintenance · AI",
     page_icon="⚙️",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
 # ============================================================
-# CUSTOM CSS
+# THEME / GLOBAL STYLES
 # ============================================================
 st.markdown(
     """
     <style>
-    /* ---------- Global ---------- */
+    /* ---------- Base ---------- */
+    html, body, [class*="css"] {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
     .stApp {
-        background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+        background:
+            radial-gradient(1200px 600px at 10% -10%, rgba(59,130,246,0.10), transparent 60%),
+            radial-gradient(1000px 500px at 100% 0%, rgba(168,85,247,0.10), transparent 55%),
+            #0b1220;
     }
     .main .block-container {
-        padding-top: 1.5rem;
+        max-width: 1180px;
+        padding-top: 1.25rem;
         padding-bottom: 3rem;
-        max-width: 1200px;
     }
-    h1, h2, h3, h4, h5, h6, p, label, span, div {
-        color: #e2e8f0 !important;
-    }
+    h1, h2, h3, h4, h5, h6, p, span, label, div { color: #e5e7eb; }
+    hr { border-color: rgba(148,163,184,0.15); }
 
-    /* ---------- Hero header ---------- */
+    /* ---------- Hero ---------- */
     .hero {
-        background: linear-gradient(120deg, #1e3a8a 0%, #4c1d95 50%, #831843 100%);
-        padding: 2.2rem 2rem;
-        border-radius: 18px;
-        margin-bottom: 1.8rem;
-        box-shadow: 0 12px 32px rgba(0,0,0,0.35);
+        position: relative;
+        padding: 2rem 2.2rem;
+        border-radius: 20px;
+        background: linear-gradient(135deg, #0b1220 0%, #111a33 40%, #1b1147 100%);
         border: 1px solid rgba(148,163,184,0.18);
+        overflow: hidden;
+        margin-bottom: 1.5rem;
+        box-shadow: 0 20px 50px rgba(0,0,0,0.45);
+    }
+    .hero::before {
+        content: "";
+        position: absolute;
+        inset: -40% -20% auto auto;
+        width: 500px; height: 500px;
+        background: radial-gradient(circle, rgba(139,92,246,0.35), transparent 60%);
+        filter: blur(20px);
+        pointer-events: none;
     }
     .hero h1 {
         margin: 0;
-        font-size: 2.2rem;
+        font-size: 2rem;
         font-weight: 800;
-        letter-spacing: -0.5px;
-        color: #ffffff !important;
+        letter-spacing: -0.6px;
+        color: #f8fafc;
     }
     .hero p {
-        margin-top: 0.6rem;
-        font-size: 1.02rem;
-        color: #cbd5e1 !important;
+        margin: 0.6rem 0 1rem 0;
         max-width: 720px;
-        line-height: 1.55;
+        font-size: 0.98rem;
+        color: #cbd5e1;
+        line-height: 1.6;
     }
-    .hero .badge {
-        display: inline-block;
-        margin-top: 1rem;
-        padding: 6px 14px;
+    .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin-right: 8px;
+        padding: 6px 12px;
         border-radius: 999px;
-        background: rgba(255,255,255,0.12);
-        border: 1px solid rgba(255,255,255,0.22);
         font-size: 0.78rem;
         font-weight: 600;
-        color: #f8fafc !important;
-        letter-spacing: 0.4px;
+        color: #e2e8f0;
+        background: rgba(255,255,255,0.06);
+        border: 1px solid rgba(255,255,255,0.12);
     }
+    .pill.green { color:#6ee7b7; border-color: rgba(16,185,129,0.35); background: rgba(16,185,129,0.10); }
+    .pill.blue  { color:#93c5fd; border-color: rgba(59,130,246,0.35); background: rgba(59,130,246,0.10); }
+    .pill.violet{ color:#c4b5fd; border-color: rgba(139,92,246,0.35); background: rgba(139,92,246,0.10); }
 
-    /* ---------- Cards ---------- */
-    .card {
-        background: rgba(30, 41, 59, 0.75);
-        border: 1px solid rgba(148, 163, 184, 0.18);
-        border-radius: 16px;
-        padding: 1.25rem 1.4rem;
-        box-shadow: 0 8px 24px rgba(0,0,0,0.28);
-        backdrop-filter: blur(6px);
-        margin-bottom: 1rem;
-    }
-    .card-title {
+    /* ---------- Section labels ---------- */
+    .section-label {
         font-size: 0.78rem;
-        text-transform: uppercase;
-        letter-spacing: 1.2px;
+        letter-spacing: 1.4px;
         font-weight: 700;
-        color: #94a3b8 !important;
+        text-transform: uppercase;
+        color: #94a3b8;
         margin-bottom: 0.35rem;
     }
-    .card-value {
-        font-size: 1.7rem;
-        font-weight: 800;
-        color: #f1f5f9 !important;
-        line-height: 1.1;
+
+    /* ---------- Metric cards ---------- */
+    .metric-card {
+        background: linear-gradient(180deg, rgba(30,41,59,0.85), rgba(15,23,42,0.85));
+        border: 1px solid rgba(148,163,184,0.16);
+        border-radius: 14px;
+        padding: 1rem 1.1rem;
+        height: 100%;
+        box-shadow: 0 6px 20px rgba(0,0,0,0.28);
     }
-    .card-sub {
-        font-size: 0.82rem;
-        color: #94a3b8 !important;
-        margin-top: 0.25rem;
+    .metric-card .label {
+        font-size: 0.72rem;
+        text-transform: uppercase;
+        letter-spacing: 1.1px;
+        font-weight: 700;
+        color: #94a3b8;
+    }
+    .metric-card .value {
+        font-size: 1.55rem;
+        font-weight: 800;
+        color: #f1f5f9;
+        line-height: 1.15;
+        margin-top: 0.2rem;
+    }
+    .metric-card .sub {
+        font-size: 0.78rem;
+        color: #94a3b8;
+        margin-top: 0.2rem;
     }
 
-    /* ---------- Result banners ---------- */
-    .result-danger {
-        background: linear-gradient(120deg, #7f1d1d 0%, #b91c1c 100%);
-        border: 1px solid #ef4444;
+    /* ---------- Result cards ---------- */
+    .result {
         border-radius: 16px;
-        padding: 1.6rem 1.8rem;
-        box-shadow: 0 10px 30px rgba(185,28,28,0.35);
-        margin-top: 1rem;
-    }
-    .result-safe {
-        background: linear-gradient(120deg, #064e3b 0%, #047857 100%);
-        border: 1px solid #10b981;
-        border-radius: 16px;
-        padding: 1.6rem 1.8rem;
-        box-shadow: 0 10px 30px rgba(4,120,87,0.35);
-        margin-top: 1rem;
-    }
-    .result-danger h2, .result-safe h2 {
-        color: #ffffff !important;
-        margin: 0;
-        font-size: 1.6rem;
-        font-weight: 800;
-    }
-    .result-danger p, .result-safe p {
-        color: #f1f5f9 !important;
+        padding: 1.5rem 1.6rem;
         margin-top: 0.5rem;
-        margin-bottom: 0;
-        font-size: 0.95rem;
-        line-height: 1.5;
+        border: 1px solid transparent;
+        box-shadow: 0 14px 40px rgba(0,0,0,0.35);
+    }
+    .result h2 { margin: 0; font-size: 1.5rem; font-weight: 800; color: #ffffff; }
+    .result p  { margin-top: 0.5rem; color: #f1f5f9; opacity: 0.92; line-height: 1.55; font-size: 0.95rem; }
+    .result.danger {
+        background: linear-gradient(135deg, #450a0a 0%, #7f1d1d 50%, #b91c1c 100%);
+        border-color: rgba(239,68,68,0.45);
+    }
+    .result.safe {
+        background: linear-gradient(135deg, #052e2b 0%, #064e3b 50%, #047857 100%);
+        border-color: rgba(16,185,129,0.45);
+    }
+    .result .risk {
+        display: inline-block;
+        margin-top: 0.75rem;
+        padding: 4px 10px;
+        border-radius: 999px;
+        font-size: 0.74rem;
+        font-weight: 700;
+        background: rgba(255,255,255,0.12);
+        color: #ffffff;
+        letter-spacing: 0.5px;
     }
 
     /* ---------- Inputs ---------- */
     div[data-baseweb="select"] > div,
     div[data-baseweb="input"] > div {
-        background-color: rgba(15, 23, 42, 0.85) !important;
-        border: 1px solid rgba(148, 163, 184, 0.25) !important;
+        background-color: rgba(15,23,42,0.9) !important;
+        border: 1px solid rgba(148,163,184,0.25) !important;
         border-radius: 10px !important;
     }
-    div[data-baseweb="select"] svg {
-        fill: #94a3b8 !important;
+    div[data-baseweb="select"] > div:hover,
+    div[data-baseweb="input"] > div:hover {
+        border-color: rgba(139,92,246,0.55) !important;
     }
+    div[data-baseweb="select"] svg { fill: #94a3b8 !important; }
 
     /* ---------- Button ---------- */
-    .stButton > button {
+    .stButton > button, .stFormSubmitButton > button {
         width: 100%;
-        padding: 0.85rem 1rem;
-        font-size: 1.02rem;
+        padding: 0.9rem 1rem;
         font-weight: 700;
+        font-size: 1rem;
         color: #ffffff !important;
         background: linear-gradient(90deg, #2563eb 0%, #7c3aed 100%);
         border: none;
         border-radius: 12px;
-        box-shadow: 0 8px 22px rgba(124,58,237,0.35);
-        transition: all 0.2s ease-in-out;
+        box-shadow: 0 10px 25px rgba(124,58,237,0.35);
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
     }
-    .stButton > button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 12px 28px rgba(124,58,237,0.5);
+    .stButton > button:hover, .stFormSubmitButton > button:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 14px 30px rgba(124,58,237,0.5);
     }
 
     /* ---------- Sidebar ---------- */
     section[data-testid="stSidebar"] {
-        background: rgba(15, 23, 42, 0.95);
-        border-right: 1px solid rgba(148,163,184,0.15);
+        background: rgba(11,18,32,0.97);
+        border-right: 1px solid rgba(148,163,184,0.14);
     }
-    section[data-testid="stSidebar"] .block-container {
-        padding-top: 1.5rem;
-    }
+    section[data-testid="stSidebar"] .block-container { padding-top: 1.2rem; }
 
-    /* ---------- Dataframe ---------- */
-    .stDataFrame {
-        border-radius: 12px;
-        overflow: hidden;
-    }
-
-    /* ---------- Progress bar ---------- */
+    /* ---------- Progress ---------- */
     .stProgress > div > div > div > div {
-        background: linear-gradient(90deg, #2563eb 0%, #7c3aed 100%);
+        background: linear-gradient(90deg, #22d3ee 0%, #2563eb 50%, #7c3aed 100%);
     }
+
+    /* ---------- Expander ---------- */
+    details {
+        border-radius: 12px !important;
+        border: 1px solid rgba(148,163,184,0.18) !important;
+        background: rgba(15,23,42,0.5) !important;
+    }
+
+    /* ---------- Footer ---------- */
+    .footer {
+        text-align: center;
+        color: #64748b;
+        font-size: 0.8rem;
+        line-height: 1.7;
+        margin-top: 2.5rem;
+    }
+    .footer strong { color: #94a3b8; }
     </style>
     """,
     unsafe_allow_html=True,
 )
 
 # ============================================================
-# LOAD MODEL
+# CONSTANTS
 # ============================================================
 MODEL_PATH = "best_model.pkl"
 
+FEATURE_COLUMNS = [
+    "Type",
+    "Air temperature [K]",
+    "Process temperature [K]",
+    "Rotational speed [rpm]",
+    "Torque [Nm]",
+    "Tool wear [min]",
+]
 
+MODEL_METRICS = {
+    "Accuracy": 0.9855,
+    "Precision": 0.8824,
+    "Recall": 0.6618,
+    "F1-Score": 0.7563,
+}
+
+
+# ============================================================
+# MODEL LOADING
+# ============================================================
 @st.cache_resource(show_spinner=False)
 def load_model(path: str):
     return joblib.load(path)
 
 
-def model_is_loaded():
-    return "model" in st.session_state
+def load_model_or_die():
+    """Loads the model once and displays a friendly error otherwise."""
+    if "model" in st.session_state:
+        return st.session_state.model
 
-
-if not model_is_loaded():
     if not os.path.exists(MODEL_PATH):
         st.markdown(
             """
             <div class="hero">
-                <h1>⚠️ Model Not Found</h1>
+                <h1>⚠️ Model file not found</h1>
                 <p>
-                    The file <code>best_model.pkl</code> could not be located in the
-                    application directory. Please make sure it is included in the
-                    repository before deploying.
+                    The file <code>best_model.pkl</code> was not found in the app
+                    directory. Please include it in the repository before deploying.
                 </p>
             </div>
             """,
@@ -217,34 +275,78 @@ if not model_is_loaded():
         st.stop()
 
     try:
-        st.session_state.model = load_model(MODEL_PATH)
-    except Exception as e:
+        model = load_model(MODEL_PATH)
+    except Exception as exc:
         st.error("❌ Unable to load the trained model.")
-        st.code(str(e))
+        st.code(str(exc))
         st.info(
             "Make sure `best_model.pkl` exists and that the scikit-learn version "
-            "used at training time matches the one installed here."
+            "used at training time matches the one installed in this environment."
         )
         st.stop()
 
+    st.session_state.model = model
+    return model
 
-model = st.session_state.model
+
+model = load_model_or_die()
+
 
 # ============================================================
-# HERO HEADER
+# HELPERS
+# ============================================================
+def predict(input_df: pd.DataFrame):
+    """Return (prediction, failure_probability)."""
+    prediction = int(model.predict(input_df)[0])
+
+    failure_prob = None
+    if hasattr(model, "predict_proba"):
+        try:
+            failure_prob = float(model.predict_proba(input_df)[0][1])
+        except Exception:
+            failure_prob = None
+
+    return prediction, failure_prob
+
+
+def risk_level(prob: float | None) -> str:
+    if prob is None:
+        return "Unknown"
+    if prob >= 0.66:
+        return "High"
+    if prob >= 0.33:
+        return "Moderate"
+    return "Low"
+
+
+def render_metric(label: str, value: str, sub: str = ""):
+    st.markdown(
+        f"""
+        <div class="metric-card">
+            <div class="label">{label}</div>
+            <div class="value">{value}</div>
+            {f'<div class="sub">{sub}</div>' if sub else ''}
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+# ============================================================
+# HERO
 # ============================================================
 st.markdown(
     """
     <div class="hero">
         <h1>⚙️ AI-Based Predictive Maintenance</h1>
         <p>
-            Predict whether an industrial machine is likely to fail based on real-time
-            operating conditions. Fill in the sensor readings below and let the trained
-            Gradient Boosting model estimate the failure risk.
+            Estimate whether an industrial machine is likely to fail from its live
+            operating conditions. Enter the sensor readings below and the trained
+            <strong>Gradient Boosting</strong> pipeline will compute the failure risk.
         </p>
-        <span class="badge">🤖 Gradient Boosting · 98.55% Accuracy</span>
-        <span class="badge">📊 F1-Score 0.756</span>
-        <span class="badge">✅ Model Ready</span>
+        <span class="pill green">● Model ready</span>
+        <span class="pill blue">Accuracy 98.55%</span>
+        <span class="pill violet">F1-Score 0.756</span>
     </div>
     """,
     unsafe_allow_html=True,
@@ -254,254 +356,196 @@ st.markdown(
 # SIDEBAR
 # ============================================================
 with st.sidebar:
-    st.markdown("### 📘 About the App")
+    st.markdown("### 📘 About this app")
     st.caption(
-        "This tool uses a machine-learning pipeline trained on the AI4I 2020 "
-        "Predictive Maintenance dataset to estimate machine failure probability."
+        "A machine-learning pipeline trained on the AI4I 2020 Predictive Maintenance "
+        "dataset. It classifies machine status as **Healthy** or **Failure** based on "
+        "six operating features."
     )
 
     st.divider()
-    st.markdown("### 🎯 Model Metrics")
+    st.markdown("### 🎯 Model performance")
 
-    m1, m2 = st.columns(2)
-    with m1:
-        st.metric("Accuracy", "98.55%")
-        st.metric("Precision", "88.24%")
-    with m2:
-        st.metric("Recall", "66.18%")
-        st.metric("F1-Score", "0.756")
+    c1, c2 = st.columns(2)
+    c1.metric("Accuracy", f"{MODEL_METRICS['Accuracy']*100:.2f}%")
+    c1.metric("Precision", f"{MODEL_METRICS['Precision']*100:.2f}%")
+    c2.metric("Recall", f"{MODEL_METRICS['Recall']*100:.2f}%")
+    c2.metric("F1-Score", f"{MODEL_METRICS['F1-Score']:.3f}")
 
     st.divider()
-    st.markdown("### 🧪 Features Used")
+    st.markdown("### 🧪 Input features")
     st.markdown(
         """
-        - **Type** – Product quality (L/M/H)
-        - **Air temperature** – Ambient temp (K)
-        - **Process temperature** – Working temp (K)
-        - **Rotational speed** – RPM
-        - **Torque** – Newton-metres
-        - **Tool wear** – Minutes used
+        | Feature | Unit |
+        |---|---|
+        | Type | L / M / H |
+        | Air temperature | Kelvin |
+        | Process temperature | Kelvin |
+        | Rotational speed | rpm |
+        | Torque | Nm |
+        | Tool wear | min |
         """
     )
 
     st.divider()
-    st.caption("Built with Streamlit · scikit-learn · joblib")
+    st.caption("Stack: Streamlit · scikit-learn · pandas")
 
 # ============================================================
 # INPUT FORM
 # ============================================================
-st.markdown("## 🧾 Enter Machine Parameters")
+st.markdown("## 🧾 Machine Parameters")
 
-with st.form("machine_input_form", clear_on_submit=False):
-    col1, col2 = st.columns(2, gap="large")
+with st.form("input_form", clear_on_submit=False):
 
-    with col1:
-        st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.markdown('<div class="card-title">Machine Identity</div>', unsafe_allow_html=True)
+    # ---- Row 1: Machine identity + temperatures ----
+    left, right = st.columns(2, gap="large")
+
+    with left:
+        st.markdown('<div class="section-label">Machine</div>', unsafe_allow_html=True)
         machine_type = st.selectbox(
-            "Machine Type",
+            "Type",
             options=["L", "M", "H"],
             index=0,
-            help="Product quality type: L = Low, M = Medium, H = High",
+            help="Product quality tier: L = Low, M = Medium, H = High.",
         )
-        st.caption("Quality grade of the manufactured product.")
-        st.markdown("</div>", unsafe_allow_html=True)
 
-        st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.markdown('<div class="card-title">Temperature Readings</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-label" style="margin-top:1rem;">Temperature</div>',
+                    unsafe_allow_html=True)
         air_temp = st.number_input(
-            "Air Temperature (K)",
-            min_value=250.0,
-            max_value=350.0,
-            value=300.0,
-            step=0.1,
-            help="Ambient air temperature around the machine, in Kelvin.",
+            "Air temperature (K)",
+            min_value=250.0, max_value=350.0, value=300.0, step=0.1,
+            help="Ambient air temperature around the machine.",
         )
         process_temp = st.number_input(
-            "Process Temperature (K)",
-            min_value=250.0,
-            max_value=400.0,
-            value=310.0,
-            step=0.1,
-            help="Temperature of the process itself, in Kelvin.",
+            "Process temperature (K)",
+            min_value=250.0, max_value=400.0, value=310.0, step=0.1,
+            help="Temperature of the manufacturing process.",
         )
-        st.markdown("</div>", unsafe_allow_html=True)
 
-    with col2:
-        st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.markdown('<div class="card-title">Mechanical Readings</div>', unsafe_allow_html=True)
+    with right:
+        st.markdown('<div class="section-label">Mechanics</div>', unsafe_allow_html=True)
         rotational_speed = st.number_input(
-            "Rotational Speed (rpm)",
-            min_value=0,
-            max_value=10000,
-            value=1500,
-            step=10,
-            help="Machine rotational speed in revolutions per minute.",
+            "Rotational speed (rpm)",
+            min_value=0, max_value=10000, value=1500, step=10,
+            help="Rotational speed of the machine spindle.",
         )
         torque = st.number_input(
             "Torque (Nm)",
-            min_value=0.0,
-            max_value=200.0,
-            value=40.0,
-            step=0.1,
-            help="Force producing rotation, measured in Newton-metres.",
+            min_value=0.0, max_value=200.0, value=40.0, step=0.1,
+            help="Rotational force applied to the tool.",
         )
         tool_wear = st.number_input(
-            "Tool Wear (min)",
-            min_value=0,
-            max_value=500,
-            value=100,
-            step=1,
-            help="Accumulated tool usage in minutes.",
+            "Tool wear (min)",
+            min_value=0, max_value=500, value=100, step=1,
+            help="Cumulative usage time of the cutting tool.",
         )
-        st.markdown("</div>", unsafe_allow_html=True)
 
-    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown("<div style='height:0.75rem'></div>", unsafe_allow_html=True)
     submitted = st.form_submit_button("🔍 Predict Machine Failure")
 
 # ============================================================
-# PREDICTION
+# PREDICTION OUTPUT
 # ============================================================
 if submitted:
-    input_data = pd.DataFrame(
-        [
-            {
-                "Type": machine_type,
-                "Air temperature [K]": air_temp,
-                "Process temperature [K]": process_temp,
-                "Rotational speed [rpm]": rotational_speed,
-                "Torque [Nm]": torque,
-                "Tool wear [min]": tool_wear,
-            }
-        ]
+    input_df = pd.DataFrame(
+        [{
+            "Type": machine_type,
+            "Air temperature [K]": air_temp,
+            "Process temperature [K]": process_temp,
+            "Rotational speed [rpm]": rotational_speed,
+            "Torque [Nm]": torque,
+            "Tool wear [min]": tool_wear,
+        }],
+        columns=FEATURE_COLUMNS,
     )
 
     try:
-        prediction = int(model.predict(input_data)[0])
+        prediction, failure_prob = predict(input_df)
 
-        # Probabilities (all pipelines in this project expose predict_proba)
-        try:
-            proba = model.predict_proba(input_data)[0]
-            failure_prob = float(proba[1]) * 100
-        except Exception:
-            failure_prob = None
+        st.markdown("## 📊 Prediction")
 
-        st.markdown("## 📊 Prediction Result")
-
+        # ---------- Result banner ----------
         if prediction == 1:
+            risk = risk_level(failure_prob)
+            prob_txt = f"Estimated failure probability: <strong>{failure_prob*100:.2f}%</strong>." \
+                if failure_prob is not None else ""
             st.markdown(
                 f"""
-                <div class="result-danger">
+                <div class="result danger">
                     <h2>⚠️ Machine Failure Predicted</h2>
                     <p>
-                        The model has detected patterns consistent with an impending
-                        failure. Immediate inspection and preventive maintenance are
-                        strongly recommended for the machine before continuing operation.
+                        The model detected operating conditions consistent with a
+                        potential failure. Inspect the machine and schedule preventive
+                        maintenance before continuing operation.
+                        {prob_txt}
                     </p>
+                    <span class="risk">Risk level: {risk}</span>
                 </div>
                 """,
                 unsafe_allow_html=True,
             )
         else:
+            risk = risk_level(failure_prob)
+            prob_txt = f"Estimated failure probability: <strong>{failure_prob*100:.2f}%</strong>." \
+                if failure_prob is not None else ""
             st.markdown(
                 f"""
-                <div class="result-safe">
+                <div class="result safe">
                     <h2>✅ No Machine Failure Predicted</h2>
                     <p>
-                        The machine is operating within the learned safe conditions.
-                        Continue normal operations and keep monitoring sensor readings
-                        periodically.
+                        The machine appears to be running under healthy conditions.
+                        Continue normal operation and keep monitoring sensor readings.
+                        {prob_txt}
                     </p>
+                    <span class="risk">Risk level: {risk}</span>
                 </div>
                 """,
                 unsafe_allow_html=True,
             )
 
-        # ---------- Result metrics ----------
-        st.markdown("<br>", unsafe_allow_html=True)
-        c1, c2, c3 = st.columns(3)
+        # ---------- KPI cards ----------
+        st.markdown("<div style='height:1rem'></div>", unsafe_allow_html=True)
+        k1, k2, k3 = st.columns(3)
 
-        with c1:
-            st.markdown(
-                f"""
-                <div class="card">
-                    <div class="card-title">Predicted Class</div>
-                    <div class="card-value">{'Failure' if prediction == 1 else 'Healthy'}</div>
-                    <div class="card-sub">Binary output from the model</div>
-                </div>
-                """,
-                unsafe_allow_html=True,
+        with k1:
+            render_metric(
+                "Predicted Class",
+                "Failure" if prediction == 1 else "Healthy",
+                "Binary output from the model",
             )
-
-        with c2:
-            if failure_prob is not None:
-                st.markdown(
-                    f"""
-                    <div class="card">
-                        <div class="card-title">Failure Probability</div>
-                        <div class="card-value">{failure_prob:.2f}%</div>
-                        <div class="card-sub">Model confidence estimate</div>
-                    </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
-            else:
-                st.markdown(
-                    """
-                    <div class="card">
-                        <div class="card-title">Failure Probability</div>
-                        <div class="card-value">N/A</div>
-                        <div class="card-sub">Not available</div>
-                    </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
-
-        with c3:
-            risk_label = (
-                "High Risk"
-                if failure_prob is not None and failure_prob >= 50
-                else "Medium Risk"
-                if failure_prob is not None and failure_prob >= 25
-                else "Low Risk"
+        with k2:
+            render_metric(
+                "Failure Probability",
+                f"{failure_prob*100:.2f}%" if failure_prob is not None else "N/A",
+                "Model confidence estimate",
             )
-            st.markdown(
-                f"""
-                <div class="card">
-                    <div class="card-title">Risk Level</div>
-                    <div class="card-value">{risk_label}</div>
-                    <div class="card-sub">Derived from failure probability</div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
+        with k3:
+            render_metric("Risk Level", risk, "Derived from probability")
 
         # ---------- Probability bar ----------
         if failure_prob is not None:
-            st.markdown("<br>", unsafe_allow_html=True)
-            st.markdown("#### 🔎 Failure Probability")
-            st.progress(min(max(failure_prob / 100, 0.0), 1.0))
+            st.markdown("<div style='height:1rem'></div>", unsafe_allow_html=True)
+            st.markdown('<div class="section-label">Failure probability</div>',
+                        unsafe_allow_html=True)
+            st.progress(min(max(failure_prob, 0.0), 1.0))
             st.caption(
-                f"The model estimates a **{failure_prob:.2f}%** chance of machine failure "
-                f"under the provided operating conditions."
+                f"The model estimates a **{failure_prob*100:.2f}%** probability of "
+                f"failure for the provided operating conditions."
             )
 
         # ---------- Input summary ----------
-        with st.expander("📋 View entered machine details", expanded=False):
-            display_df = input_data.copy()
-            display_df.insert(0, "Parameter", display_df.index + 1)
+        with st.expander("📋 View entered parameters"):
             st.dataframe(
-                display_df,
+                input_df.T.rename(columns={0: "Value"}),
                 use_container_width=True,
-                hide_index=True,
             )
 
-    except Exception as e:
+    except Exception as exc:
         st.error("❌ An error occurred while making the prediction.")
-        st.code(str(e))
+        st.code(str(exc))
         st.caption(
-            "Check the input column names and the preprocessing pipeline "
-            "used when training the model."
+            "Check that the input column names match the training features "
+            "and that the preprocessing pipeline expects the same schema."
         )
         with st.expander("Show full traceback"):
             st.code(traceback.format_exc())
@@ -509,12 +553,11 @@ if submitted:
 # ============================================================
 # FOOTER
 # ============================================================
-st.markdown("<br><br>", unsafe_allow_html=True)
 st.markdown(
     """
-    <div style="text-align:center; color:#64748b; font-size:0.82rem; line-height:1.6;">
-        ⚙️ <strong>AI-Based Predictive Maintenance</strong><br>
-        Powered by Gradient Boosting &amp; scikit-learn · Built with Streamlit<br>
+    <div class="footer">
+        <strong>AI-Based Predictive Maintenance</strong><br>
+        Gradient Boosting · scikit-learn · Streamlit<br>
         <em>For informational purposes only — always confirm with physical inspection.</em>
     </div>
     """,
